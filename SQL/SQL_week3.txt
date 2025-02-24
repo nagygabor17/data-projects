@@ -1,0 +1,121 @@
+select * from webshop_data_small;
+
+DROP TABLE webshop_data_small;
+DROP TABLE orders;
+
+CREATE TABLE orders AS
+SELECT
+    webshop_data_small."First Name",
+    webshop_data_small."Last Name",
+    webshop_data_small.email,
+    webshop_data_small."Total Time"::bigint * '1 seconds'::interval total_time,
+    webshop_data_small."Pages Visited"::int pages_visited,
+    webshop_data_small."Deal Size",
+    webshop_data_small.country,
+    webshop_data_small."Order Date"::date order_date,
+    REPLACE(webshop_data_small."Order Total", ',', '.')::decimal "Order total",
+    webshop_data_small.product,
+    webshop_data_small.amount::float order_amount,
+    webshop_data_small."Order Id"
+FROM webshop_data_small
+WHERE email IS NOT NULL AND webshop_data_small."Order Total" IS NOT NULL;
+
+CREATE TABLE orders_small AS
+SELECT
+    first_name,
+    last_name,
+    email,
+    total_time::bigint * '1 seconds'::interval total_time,
+    pages_visited::int pages_visited,
+    deal_size,
+    country,
+    created_at,
+    order_date::date order_date,
+    REPLACE(order_total, ',', '.')::decimal "Order total",
+    product,
+    amount::float order_amount
+FROM webshop_data_small2
+WHERE email IS NOT NULL AND webshop_data_small2.order_total IS NOT NULL;
+
+select AVG("Order total") from orders;
+
+SELECT country, product, AVG("Order total")
+FROM orders
+GROUP BY GROUPING SETS(
+    (country, product),
+    (country),
+    (product),
+    ()
+    )
+ORDER BY country, product;
+
+SELECT country, product, "Deal Size", AVG("Order total")
+FROM orders
+GROUP BY CUBE (country, product, "Deal Size")
+ORDER BY country, product, "Deal Size";
+
+-- ROLLUP
+
+SELECT country, string_agg(DISTINCT product,', ')
+FROM orders
+GROUP BY country;
+
+SELECT
+    country,
+    AVG(
+        CASE
+            WHEN "Deal Size" = 'Large' THEN orders.total_time
+            ELSE NULL
+        END)
+FROM orders
+GROUP BY country;
+
+SELECT
+    country,
+    AVG(total_time) FILTER ( WHERE "Deal Size" = 'Large' ) as Large_avg,
+    AVG(total_time) FILTER ( WHERE "Deal Size" = 'Medium' ) as Medium_avg,
+    AVG(total_time) FILTER ( WHERE "Deal Size" = 'Small' ) as Small_avg
+FROM orders
+GROUP BY country;
+
+SELECT EXTRACT(YEAR FROM order_date) as year,
+       EXTRACT(MONTH FROM order_date) as month,
+       SUM("Order total") as total
+FROM orders
+GROUP BY ROLLUP (year, month)
+ORDER BY year, month;
+
+SELECT year || '-' || month as dates, total FROM
+(
+    SELECT EXTRACT(YEAR FROM order_date)  as year,
+           EXTRACT(MONTH FROM order_date) as month,
+           SUM("Order total")             as total
+    FROM orders
+    GROUP BY ROLLUP (year, month)
+    ORDER BY year, month
+) as orderstotal;
+
+SELECT
+    "First Name",
+    "Last Name",
+    SUM(order_amount),
+    dense_rank() OVER (ORDER BY SUM(order_amount) DESC)
+FROM orders
+GROUP BY "First Name", "Last Name" ;
+
+SELECT
+    "First Name",
+    "Last Name",
+    "Order total",
+    dense_rank() OVER (ORDER BY "Order total" DESC)
+FROM orders ;
+
+SELECT
+    "First Name",
+    "Last Name",
+    order_amount,
+    total_time,
+    dense_rank() OVER (ORDER BY total_time DESC),
+    COALESCE(((LAG(total_time) OVER (ORDER BY total_time DESC)) - total_time), '0 seconds'::interval)
+FROM orders
+;

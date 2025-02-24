@@ -1,0 +1,101 @@
+select count(*) from booking_hotels;
+
+DROP TABLE booking_hotels;
+
+CREATE TABLE booking_hotels AS
+SELECT
+    booking_id,
+    booking_date::date as booking_date,
+    checkin_date::date as checkin_date,
+    checkout_date::date as checkout_date,
+    guest_id,
+    guest_name,
+    guest_email,
+    guest_country,
+    room_id,
+    room_type,
+    num_adults::int as num_adults,
+    num_children::int as num_children,
+    num_nights::int as num_nights,
+    special_requests,
+    REPLACE(total_price, ',', '.')::decimal as total_price,
+    hotel_id,
+    hotel_name,
+    hotel_city,
+    hotel_country,
+    star_rating::int as star_rating
+FROM hotel_bookings
+WHERE guest_email IS NOT NULL ;
+
+SELECT hotel_country,
+       COUNT(*),
+       SUM(total_price) FILTER ( WHERE num_children = 0 ) as sum_without_children,
+       SUM(total_price) FILTER ( WHERE num_children > 0 ) as sum_with_children
+FROM booking_hotels
+GROUP BY hotel_country;
+
+SELECT hotel_country,
+       room_type,
+       AVG(total_price)
+FROM booking_hotels
+GROUP BY GROUPING SETS(
+    (hotel_country, room_type),
+    (hotel_country),
+    ()
+    )
+ORDER BY hotel_country, room_type;
+
+SELECT
+    EXTRACT(YEAR FROM booking_date) as year,
+    EXTRACT(MONTH FROM booking_date) as month,
+    SUM(total_price)
+FROM booking_hotels
+GROUP BY ROLLUP (year, month)
+ORDER BY year, month;
+
+SELECT hotel_country,
+       (SUM(total_price) / SUM(num_nights))::decimal as price_per_night
+FROM booking_hotels
+GROUP BY hotel_country
+ORDER BY price_per_night DESC;
+
+SELECT hotel_name,
+       room_type,
+       SUM(total_price),
+       COUNT(*)
+FROM booking_hotels
+GROUP BY GROUPING SETS(
+    (hotel_name, room_type),
+    (hotel_name),
+    ()
+    )
+ORDER BY hotel_name, room_type;
+
+SELECT to_char(checkin_date, 'Day') weekday,
+       COUNT(*)
+FROM booking_hotels
+GROUP BY weekday
+ORDER BY COUNT(*) DESC;
+
+
+SELECT
+    EXTRACT(YEAR FROM booking_date) as year,
+    SUM(total_price) as this_year,
+    LAG(SUM(total_price)) OVER (ORDER BY EXTRACT(YEAR FROM booking_date)) as previous_year,
+    SUM(total_price) - (LAG(SUM(total_price)) OVER (ORDER BY EXTRACT(YEAR FROM booking_date))) change_yoy,
+    SUM(total_price) / (LAG(SUM(total_price)) OVER (ORDER BY EXTRACT(YEAR FROM booking_date))) growth_yoy
+FROM booking_hotels
+GROUP BY year
+ORDER BY year;
+
+
+SELECT
+    EXTRACT(MONTH FROM booking_date) as month,
+    SUM(total_price) as sum
+FROM booking_hotels
+GROUP BY month
+ORDER BY sum DESC;
+
+SELECT
+    checkin_date - booking_date AS eltelt_napok
+FROM booking_hotels;

@@ -1,0 +1,48 @@
+select * from orders_small;
+
+SELECT * FROM
+    (SELECT
+         first_name,
+         last_name,
+         order_amount,
+         total_time,
+         dense_rank() OVER (ORDER BY order_amount DESC) as rank
+    FROM orders_small) as orders_rank
+WHERE rank = 2;
+
+SELECT * FROM
+    (SELECT
+         first_name,
+         last_name,
+         country,
+         order_amount,
+         total_time,
+         dense_rank() OVER (PARTITION BY country ORDER BY order_amount DESC) as rank
+     FROM orders_small) as orders_rank;
+
+DELETE FROM orders_small
+WHERE email||created_at IN
+(SELECT email, created_at FROM
+(SELECT
+    email,
+    created_at,
+    ROW_NUMBER() OVER (PARTITION BY email, created_at) as row_number
+FROM orders_small) as orders_row_number
+WHERE row_number > 1);
+
+DELETE FROM orders_small
+WHERE EXISTS (
+    SELECT 1
+    FROM (
+             SELECT
+                 email,
+                 created_at,
+                 ROW_NUMBER() OVER (PARTITION BY email, created_at) as row_number
+             FROM orders_small
+         ) as orders_row_number
+    WHERE orders_small.email = orders_row_number.email
+      AND orders_small.created_at = orders_row_number.created_at
+      AND orders_row_number.row_number > 1
+);
+
+select count(*) from orders_small;
